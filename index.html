@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <title>Firebase Push Notification পরীক্ষা</title>
+    <style>
+        body { font-family: sans-serif; display: grid; place-content: center; min-height: 100vh; text-align: center; }
+        button { font-size: 1.2rem; padding: 10px 20px; cursor: pointer; }
+        #token-display { margin-top: 20px; padding: 10px; background-color: #f0f0f0; border: 1px solid #ccc; word-break: break-all; }
+        #status { font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h1>Firebase Push Notification পরীক্ষা</h1>
+    <p id="status">নোটিফিকেশনের অনুমতি পেতে নিচের বাটনে ক্লিক করুন।</p>
+    <button id="permission-btn">অনুমতি দিন</button>
+    
+    <h3>আপনার ডিভাইস টোকেন:</h3>
+    <pre id="token-display">এখানে টোকেন দেখানো হবে...</pre>
+
+    <!-- মডিউল হিসেবে Firebase SDK ইম্পোর্ট করা হচ্ছে -->
+    <script type="module">
+      // Firebase SDK থেকে প্রয়োজনীয় ফাংশন ইম্পোর্ট করুন
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
+      import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-messaging.js";
+
+      // আপনার ওয়েব অ্যাপের Firebase কনফিগারেশন (আপনি যা দিয়েছেন)
+      const firebaseConfig = {
+        apiKey: "AIzaSyBkEurB8a1xfrzE1yT4scdf801ovdq5-rw",
+        authDomain: "guild-f8843.firebaseapp.com",
+        databaseURL: "https://guild-f8843-default-rtdb.firebaseio.com",
+        projectId: "guild-f8843",
+        storageBucket: "guild-f8843.firebasestorage.app",
+        messagingSenderId: "959781172981",
+        appId: "1:959781172981:web:593da4b7610ae7db83b7bc"
+      };
+
+      // আপনার VAPID কী (আপনি যা দিয়েছেন)
+      const VAPID_KEY = "BBFbOiyfdCgSUg8vTjIMT6scojec2-nYAhyVOAfCXs17kWI73t4Z3K53HXDUOTblBbAdrXmxAAcKbBWZrGPlL9Q";
+
+      // Firebase ইনিশিয়ালাইজ করুন
+      const app = initializeApp(firebaseConfig);
+      const messaging = getMessaging(app);
+
+      const permissionBtn = document.getElementById('permission-btn');
+      const tokenDisplay = document.getElementById('token-display');
+      const statusDiv = document.getElementById('status');
+
+      // বাটনে ক্লিক করলে কাজ শুরু হবে
+      permissionBtn.onclick = function() {
+        requestPermissionAndGetToken();
+      }
+
+      async function requestPermissionAndGetToken() {
+        try {
+          // ধাপ ১: সার্ভিস ওয়ার্কার রেজিস্টার করুন
+          // Firebase নিজে থেকেই তার সার্ভিস ওয়ার্কার ফাইল ('firebase-messaging-sw.js') রেজিস্টার করে নেবে।
+          const swRegistration = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+          console.log('সার্ভিস ওয়ার্কার সফলভাবে রেজিস্টার হয়েছে।');
+          statusDiv.textContent = 'সার্ভিস ওয়ার্কার রেজিস্টার হয়েছে...';
+
+          // ধাপ ২: নোটিফিকেশনের অনুমতি চান
+          console.log('নোটিফিকেশনের অনুমতির জন্য অনুরোধ করা হচ্ছে...');
+          statusDiv.textContent = 'অনুগ্রহ করে নোটিফিকেশনের অনুমতি দিন...';
+          const permission = await Notification.requestPermission();
+
+          if (permission === 'granted') {
+            console.log('নোটিফিকেশনের অনুমতি পাওয়া গেছে।');
+            statusDiv.textContent = 'অনুমতি পাওয়া গেছে! টোকেন নেওয়া হচ্ছে...';
+
+            // ধাপ ৩: ডিভাইস টোকেন সংগ্রহ করুন
+            const currentToken = await getToken(messaging, { 
+                vapidKey: VAPID_KEY,
+                serviceWorkerRegistration: swRegistration // রেজিস্টার করা সার্ভিস ওয়ার্কার ব্যবহার করুন
+            });
+
+            if (currentToken) {
+              console.log('ডিভাইস টোকেন:', currentToken);
+              tokenDisplay.textContent = currentToken;
+              statusDiv.textContent = 'সফল! নিচের টোকেনটি কপি করে ফায়ারবেস কনসোলে টেস্ট করুন।';
+            } else {
+              console.log('দুঃখিত, কোনো ডিভাইস টোকেন পাওয়া যায়নি।');
+              statusDiv.textContent = 'ত্রুটি: টোকেন পাওয়া যায়নি।';
+            }
+          } else {
+            console.log('নোটিফিকেশনের অনুমতি দেওয়া হয়নি।');
+            statusDiv.textContent = 'আপনি অনুমতি দেননি।';
+          }
+        } catch (error) {
+          console.error('টোকেন পেতে একটি ত্রুটি ঘটেছে:', error);
+          statusDiv.textContent = `ত্রুটি: ${error.message}`;
+        }
+      }
+      
+      // অ্যাপটি ফোরগ্রাউন্ডে থাকলে নোটিফিকেশন হ্যান্ডেল করার জন্য
+      onMessage(messaging, (payload) => {
+        console.log('ফোরগ্রাউন্ডে মেসেজ পাওয়া গেছে: ', payload);
+        alert(`নতুন নোটিফিকেশন:\n${payload.notification.title}\n${payload.notification.body}`);
+      });
+
+    </script>
+</body>
+</html>
